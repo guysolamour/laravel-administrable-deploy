@@ -22,8 +22,8 @@ instead of using the issue tracker.
 
 ## Credits
 
-- [Guy-roland ASSALE](https://github.com/guysolamour/laravel-administrable-crudgenerator)
-- [All contributors](https://github.com/guysolamour/laravel-administrable-crudgenerator/graphs/contributors)
+- [Guy-roland ASSALE](https://github.com/guysolamour/laravel-administrable-deploy)
+- [All contributors](https://github.com/guysolamour/laravel-administrable-deploy/graphs/contributors)
 
 This package is bootstrapped with the help of
 [melihovv/laravel-package-generator](https://github.com/melihovv/laravel-package-generator).

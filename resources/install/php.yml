@@ -1,11 +1,24 @@
 ---
-- name: PHP Install
+- name: Installation install software-properties-common
   apt:
-    name: php
+    name: software-properties-common
+
+- name: "Repo PHP {{ php_version }}"
+  apt_repository:
+    repo: "ppa:ondrej/php"
+    state: present
+
+- name: "Updating the repo"
+  apt:
+    update_cache: yes
+
+- name: "Installation PHP {{ php_version }}"
+  apt:
+    name: "php{{ php_version }}"
+    state: present
 
 - name: Install PHP libs
   apt:
-    update_cache: yes
     name:
       - "php{{ php_version }}-fpm"
       - "php{{ php_version }}-curl"

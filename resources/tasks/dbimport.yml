@@ -30,7 +30,7 @@
 
   - name: Import remote database in host
     command: "php artisan snapshot:load {{ database_dump_filename }}"
-    become: "{{ remote_default_user }}"
+    become: true
     args:
       chdir: "{{ project_path }}"
     delegate_to: localhost
@@ -42,7 +42,7 @@
 
   - name: Remove host dump file
     command: "php artisan snapshot:delete {{ database_dump_filename }}"
-    become: "{{ remote_default_user }}"
+    become: true
     args:
       chdir: "{{ project_path }}"
     delegate_to: localhost

@@ -1,0 +1,7 @@
+/.history
+# /deploy
+/vendor
+/.idea
+/node_modules
+/composer.lock
+/.phpunit.result.cache

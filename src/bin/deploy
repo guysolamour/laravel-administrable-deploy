@@ -1,0 +1,236 @@
+#!/bin/bash
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER BINAIRE DE COMPOSER
+#------------------------------------------------------------------------------------------------------------------------------>
+if [[ -z "$COMPOSER_RUNTIME_BIN_DIR" ]]; then
+  BIN_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+else
+  BIN_DIR="$COMPOSER_RUNTIME_BIN_DIR"
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER DU PROJET A DEPLOY
+#------------------------------------------------------------------------------------------------------------------------------>
+PROJECT_DIR=$(dirname "$(dirname "$BIN_DIR")")
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER DU PROJET
+#------------------------------------------------------------------------------------------------------------------------------>
+CURRENT_DIR="$( cd "$( dirname "${0}" )" && pwd )"
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER DES TACHES ANSIBLES
+#------------------------------------------------------------------------------------------------------------------------------>
+PLAYBOOKS_DIR=$(dirname "$CURRENT_DIR")/resources
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LES FICHIERS STUBS
+#------------------------------------------------------------------------------------------------------------------------------>
+STUBS=('.deploy-vaultpass' '.deploy-passwords.yml' 'deploy.sh' '.deploy-env')
+
+STUB_VAULT_PASSWORD_FILE=${STUBS[0]}
+STUB_DEPLOY_PASSWORD_FILE=${STUBS[1]}
+STUB_DEPLOY_FILE=${STUBS[2]}
+
+STUB_VAULT_PASSWORD_FILE_PATH=$PROJECT_DIR/$STUB_VAULT_PASSWORD_FILE
+STUB_DEPLOY_PASSWORD_FILE_PATH=$PROJECT_DIR/$STUB_DEPLOY_PASSWORD_FILE
+STUB_DEPLOY_FILE_PATH=$PROJECT_DIR/$STUB_DEPLOY_FILE
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER DES STUBS
+#------------------------------------------------------------------------------------------------------------------------------>
+STUBS_DIR=$(dirname "$CURRENT_DIR")/stubs
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LE DOSSIER TEMPORAIRE OU STOCKER LES DONNEES LORS DU DEPLOIEMENT
+#------------------------------------------------------------------------------------------------------------------------------>
+# LE DOSSIER OÙ SERA STOCKÉ LES FICHIERS TEMPORAIRES
+# CE DOSSIER NE DOIT PAS ETRE VERSIONNÉ
+TEMP_DIR="$PROJECT_DIR/storage/app/deploy/tmp"
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  INCLUDE HELPERS FILE
+#------------------------------------------------------------------------------------------------------------------------------>
+source "$CURRENT_DIR/inc/helpers.sh"
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  LES COMMANDES DISPONIBLES
+#------------------------------------------------------------------------------------------------------------------------------>
+ALL_COMMANDS=(
+  'help' 'scaffold' 'configure:server' 'password:create' 'password:view' 'password:edit' 'password:delete'
+  'run' 'rollback' 'db:seed' 'db:deploy' 'db:dump' 'db:import' 'storage:dump' 'storage:import' 'storage:deploy'
+  'exec' 'dkim' 'clean' 'ssh' 'env:deploy'
+)
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  Utiliser pour spliter les commandes commencant par password
+#------------------------------------------------------------------------------------------------------------------------------>
+PASSWORD_COMMANDS_DELIMITERS=("password" ":")
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  DISPLAY TITLE
+#------------------------------------------------------------------------------------------------------------------------------>
+title "$(echoMessage 'WELCOME TO DEPLOY BY GUYSOLAMOUR')"
+title
+#------------------------------------------------------------------------------------------------------------------------------>
+# WE GET FIRST ARGUMENT, THE NAME OF THE COMMAND TO RUN AND LOWERCASE IT
+# IF THE COMMAND IS NOT AVAILABLE, WE THROW AND EXCEPTION AND STOP SCRIPT
+# IF NO VALUE IS PROVIDED, THE HELP COMMAND WILL BE RUN
+#------------------------------------------------------------------------------------------------------------------------------>
+
+if [ $1 ]; then
+    COMMAND=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+else
+    COMMAND="help"
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# We get second argument, for some commands
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $2 ]
+then
+    ARGUMENT=$2
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  VERIFIER SI LA COMMANDE EST DEFINIE
+#------------------------------------------------------------------------------------------------------------------------------>
+if  ! array_contains ALL_COMMANDS "${COMMAND}"; then
+    echoError "${COMMAND} is not valid. Available commands are' ${ALL_COMMANDS[*]}'"
+    exit 1
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  INCLUDE HELP AND SCAFFOLD COMMAND
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $COMMAND = "${ALL_COMMANDS[0]}" ] || [ $COMMAND = "${ALL_COMMANDS[1]}" ]
+then
+  if test -f "$CURRENT_DIR/inc/$COMMAND.sh"; then
+    source $CURRENT_DIR/inc/$COMMAND.sh
+    exit 1
+  fi
+fi
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# CHECK IF SCAFFOLD COMMAND HAS ALREADY BEEN RUN
+#------------------------------------------------------------------------------------------------------------------------------>
+if ! test -f "$STUB_DEPLOY_FILE_PATH"; then
+  echoError "Vous devez executer la commande './vendor/bin/deploy scaffold' avant d'utiliser cette commande"
+  exit 1
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# PASSWORDS COMMANDS CREATE|VIEW|EDIT|DELETE
+#------------------------------------------------------------------------------------------------------------------------------>
+for item in ${ALL_COMMANDS[@]}; do
+  if [ $item == $COMMAND ]; then
+    if  [[ $item == ${PASSWORD_COMMANDS_DELIMITERS[0]}* ]];then
+      if [ $COMMAND == "password:delete" ]; then
+          while true; do
+            read -p "Do you wish to remove this file [yes|no]? " yn
+
+            case $yn in
+                [Yy]* ) rm -rf $STUB_DEPLOY_PASSWORD_FILE_PATH; echoSuccess "$STUB_DEPLOY_PASSWORD_FILE_PATH file deleted"; break;;
+                [Nn]* ) exit;;
+                * ) echo "Please answer yes or no.";;
+          esac
+        done
+      else
+        target=${item#*"${PASSWORD_COMMANDS_DELIMITERS[0]}${PASSWORD_COMMANDS_DELIMITERS[1]}"} # password:
+
+        ansible-vault $target $STUB_DEPLOY_PASSWORD_FILE_PATH --vault-password-file=$STUB_VAULT_PASSWORD_FILE_PATH -vv
+      fi
+      exit 1
+    fi
+  fi
+done
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# INCLUDE SCAFFOLD DEPLOY.SH
+#------------------------------------------------------------------------------------------------------------------------------>
+source $STUB_DEPLOY_FILE_PATH # Pour recuperer la variable host
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# RUN A COMMAND ON HOST MACHINE FROM CURRENT DEPLOY DIRECTORY
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $COMMAND == "exec" ]
+then
+    if [ $ARGUMENT ]
+    then
+      ssh "${USER}@${HOST}" cd "/home/${USER}/${DOMAIN}/current && ${ARGUMENT}"
+      exit 1
+    fi
+    exit 1
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# RUN A COMMAND ON HOST MACHINE FROM CURRENT DEPLOY DIRECTORY
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $COMMAND == "ssh" ]
+then
+    ssh "${USER}@${HOST}"
+    exit 1
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# DISPLAY DKIM PUBLIC KEY
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $COMMAND == "dkim" ]
+then
+  ssh ${USER}@${HOST} "cd /home/${USER}/${DOMAIN}/current && cat ${DKIM_STORAGE_PUBLIC_KEY_PATH}"
+  exit 1
+fi
+
+#------------------------------------------------------------------------------------------------------------------------------>
+# REMOVE DEPLOYED TEMPORARY FILES
+#------------------------------------------------------------------------------------------------------------------------------>
+if [ $COMMAND == "clean" ] || [ $COMMAND == "run" ]
+then
+    echoDefault 'Removing temporary files'
+	  rm -rf "${TEMP_DIR}/${ARCHIVE}"
+	  rm -rf "${TEMP_DIR}/${ARCHIVE}.zip"
+    echoSuccess 'Temporary files removed'
+
+    if [ $COMMAND == "clean" ]; then
+      exit 1
+    fi
+fi
+
+# ajouter
+
+
+
+#------------------------------------------------------------------------------------------------------------------------------>
+#  INCLUDE ANSIBLE PLAYBOOK AND GENERATED DEPLOY.SH FILE
+#------------------------------------------------------------------------------------------------------------------------------>
+if test -f "$PLAYBOOKS_DIR/tasks/$COMMAND.yml"; then
+
+  # Recupere le contenu du fichier, retire les commentaires et lowercase le nom des variables
+  PLAYBOOK_VARIABLES=$(awk -F= -v OFS='=' '/=/{$1=tolower($1)}1' $STUB_DEPLOY_FILE_PATH | awk '$1 ~ /^[^;#]/')
+
+  #  Append some variables
+  PLAYBOOK_VARIABLES+=" playbooks_directory_path=${PLAYBOOKS_DIR}"
+  PLAYBOOK_VARIABLES+=" project_path=${PROJECT_DIR}"
+  PLAYBOOK_VARIABLES+=" temporary_dir=${TEMP_DIR}"
+  PLAYBOOK_VARIABLES+=" stub_deploy_password_file_path=${STUB_DEPLOY_PASSWORD_FILE_PATH}"
+  PLAYBOOK_VARIABLES+=" ignored_files_for_archive=$(get_ignored_files_for_archive)"
+  PLAYBOOK_VARIABLES+=" argument=$ARGUMENT"
+  PLAYBOOK_VARIABLES+=" host_current_user=$(whoami)"
+
+  #  Append some local .env variables
+
+
+  # echo $PLAYBOOK_VARIABLES
+  # # inclure les locals variables pour les commandes speciique
+  # exit 1
+
+  ansible-playbook -i "${HOST}," ${PLAYBOOKS_DIR}/tasks/${COMMAND}.yml --vault-password-file $STUB_VAULT_PASSWORD_FILE_PATH --extra-vars "$PLAYBOOK_VARIABLES" -v
+  exit 1
+fi
+

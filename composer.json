@@ -1,5 +1,5 @@
 {
-    "name": "guysolamour/deploy",
+    "name": "guysolamour/laravel-deploy",
     "description": "Laravel deployment system built with ansible & ansistrano",
     "keywords": ["laravel", "deploy"],
     "license": "MIT",
@@ -9,7 +9,9 @@
           "email": "rolandassale@gmail.com"
         }
     ],
+    "bin": ["src/bin/deploy"],
     "minimum-stability": "stable",
     "require": {
+      "illuminate/support": ">=6.0"
     }
 }

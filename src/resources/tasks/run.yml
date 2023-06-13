@@ -1,0 +1,19 @@
+---
+- name: Deploy laravel project
+  hosts: all
+  gather_facts: no
+  # become: yes
+  remote_user: "{{ user }}"
+
+  tasks:
+    - name: Include default variables
+      include_vars: "{{ playbooks_directory_path }}/variables/default.yml"
+
+    - name: Include variables
+      include_vars: "{{ playbooks_directory_path }}/variables/deploy.yml"
+
+    - name: Include password file
+      include_vars: "{{ stub_deploy_password_file_path }}"
+
+    - include_role:
+        name: ansistrano.deploy

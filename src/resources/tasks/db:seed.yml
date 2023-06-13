@@ -1,0 +1,24 @@
+---
+- name: Seed database
+  hosts: all
+  gather_facts: no
+  remote_user:  "{{ user }}"
+
+  tasks:
+  - name: Include default variables
+    include_vars: "{{ playbooks_directory_path }}/variables/default.yml"
+
+  - name: Include variables
+    include_vars: "{{ playbooks_directory_path }}/variables/db.yml"
+
+  - name: Run seed
+    shell: "php{{ php_version }} artisan db:seed --force"
+    args:
+      chdir: "{{ current_realease_path }}"
+    when:  argument == ''
+
+  - name: "Run {{ argument }} seed"
+    shell: "php{{ php_version }} artisan db:seed --class {{ argument }} --force"
+    args:
+      chdir: "{{ current_realease_path }}"
+    when:  argument != ''

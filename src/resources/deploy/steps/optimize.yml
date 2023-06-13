@@ -1,0 +1,33 @@
+---
+- name: "Set variables"
+  set_fact:
+    realease_path: "{{ ansistrano_release_path.stdout if ansistrano_release_path is defined else current_realease_path }}"
+
+- name: "Optimize laravel installation"
+  shell: "php{{ php_version }} artisan {{ item.command }}"
+  args:
+    chdir: "{{ realease_path }}"
+  with_items:
+    - { command: "cache:clear" }
+    - { command: "config:clear" }
+    - { command: "view:clear"}
+    - { command: "route:clear" }
+    - { command: "config:cache" }
+    - { command: "route:cache" }
+    - { command: "view:cache" }
+    - { command: "optimize" }
+
+- name: Horizon Publish
+  shell: "php{{ php_version }} artisan horizon:publish"
+  ignore_errors: yes # will not run if horizon package was not installed
+  args:
+    chdir: "{{ realease_path }}"
+  when: horizon == 'yes' or horizon == 'true'
+
+- name: Telescope Publish
+  shell: "php{{ php_version }} artisan telescope:publish"
+  ignore_errors: yes # will not run if telescope package was not installed
+  args:
+    chdir: "{{ realease_path }}"
+  when: telescope == 'yes' or telescope == 'true'
+

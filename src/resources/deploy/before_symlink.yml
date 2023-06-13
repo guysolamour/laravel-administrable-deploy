@@ -1,0 +1,15 @@
+---
+- name: Include composer file
+  include_tasks: "{{ playbooks_directory_path }}/deploy/steps/composer.yml"
+
+- name: Include create sqlite database file
+  include_tasks: "{{ playbooks_directory_path }}/deploy/steps/create_sqlite_database.yml"
+  when: database_connection == 'sqlite'
+
+- name: Include env file
+  include_tasks: "{{ playbooks_directory_path }}/deploy/steps/env.yml"
+
+- name: Include create_storage_directory file
+  include_tasks: "{{ playbooks_directory_path }}/deploy/steps/create_storage_directory.yml"
+
+

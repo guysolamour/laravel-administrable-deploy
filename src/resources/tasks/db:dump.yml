@@ -1,0 +1,103 @@
+---
+- name: Dump mysql database
+  hosts: all
+  gather_facts: no
+  remote_user:  "{{ user }}"
+  tasks:
+  - name: Include default variables
+    include_vars: "{{ playbooks_directory_path }}/variables/default.yml"
+
+  - name: Include variables
+    include_vars: "{{ playbooks_directory_path }}/variables/db.yml"
+
+  - name: Include password file
+    include_vars: "{{ stub_deploy_password_file_path }}"
+
+  - name: Get remote database driver
+    shell: "php artisan tinker --execute=\"echo config('database.default');\""
+    register: remote_database_driver
+    args:
+      chdir: "{{ current_realease_path }}"
+
+  # SQLITE
+
+  - name: "SQLITE: Get remote database url"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.database');\""
+    register: remote_sqlite_database_path
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Dump remote sqlite database"
+    shell: "sqlite3 {{ remote_sqlite_database_path.stdout }} .dump > {{ database_dump_filename }}"
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Copy file from remote to host"
+    fetch:
+      src: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      dest: "{{ project_path }}/"
+      owner: "{{ host_current_user }}"
+      group: "{{ host_current_user }}"
+      mode: 0775
+      flat: yes
+    when: "remote_database_driver.stdout == 'sqlite'"
+
+  # MYSQL
+
+  - name: "MYSQL: Get remote host"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.host');\""
+    register: remote_mysql_database_host
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote port"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.port');\""
+    register: remote_mysql_database_port
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote username"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.username');\""
+    register: remote_mysql_database_username
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote password"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.password');\""
+    register: remote_mysql_database_password
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote database"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.database');\""
+    register: remote_mysql_database_database
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: dump remote database"
+    mysql_db:
+      state: dump
+      login_host: "{{ remote_mysql_database_host.stdout }}"
+      login_port: "{{ remote_mysql_database_port.stdout }}"
+      login_user: "{{ remote_mysql_database_username.stdout }}"
+      login_password: "{{ remote_mysql_database_password.stdout }}"
+      name: "{{ remote_mysql_database_database.stdout }}"
+      target: "{{ current_realease_path }}/{{ database_dump_filename }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Copy file from remote to host"
+    fetch:
+      src: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      dest: "{{ project_path }}/"
+      owner: "{{ host_current_user }}"
+      group: "{{ host_current_user }}"
+      mode: 0775
+      flat: yes
+    when: "remote_database_driver.stdout == 'mysql'"

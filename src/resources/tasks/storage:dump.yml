@@ -1,0 +1,28 @@
+---
+- name: Dump storage folder
+  hosts: all
+  remote_user: "{{ user }}"
+
+  vars:
+    dump_path: "/home/{{ user }}/{{ application }}storage.zip"
+
+  tasks:
+  - name: Include default variables
+    include_vars: "{{ playbooks_directory_path }}/variables/default.yml"
+
+  - name: Zip storage folder
+    archive:
+      path: "/home/{{ user }}/{{ domain }}/shared/storage/"
+      dest: "{{ dump_path }}"
+      format: zip
+
+  - name: Copy file from remote to host
+    fetch:
+      src: "{{ dump_path }}"
+      dest: "{{ path }}/"
+      flat: yes
+
+  - name: Delete remote archive
+    file:
+      path: "{{ dump_path }}"
+      state: absent

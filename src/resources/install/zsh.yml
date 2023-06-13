@@ -1,0 +1,72 @@
+---
+- name: Install zsh (with dependencies)
+  apt:
+    name: zsh
+    state: present
+
+- name: Check if .zshrc exists
+  stat:
+    path: "/home/{{ user }}/.zshrc"
+  register: zshrc_file
+
+- name: Check if .oh-my-zsh exists
+  stat:
+    path: "/home/{{ user }}/.oh-my-zsh"
+  register: stat_oh_my_zsh_result
+
+- name: Check if .oh-my-zsh zsh-autosuggestions plugin exists
+  stat:
+    path: "/home/{{ user }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+  register: zsh_autosuggestions
+
+- name: Install oh-my-zsh
+  become_user: "{{ user }}"
+  shell:
+    cmd: sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+  args:
+    chdir: "/home/{{ user }}"
+  when: not stat_oh_my_zsh_result.stat.exists
+
+
+- name: Clone du module autosuggestions
+  git:
+    repo: https://github.com/zsh-users/zsh-autosuggestions.git
+    dest: "/home/{{ user }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
+  when: not zsh_autosuggestions.stat.exists
+
+- name: "Change informations in /home/{{ user }}/.zshrc file"
+  lineinfile:
+    path: "/home/{{ user }}/.zshrc"
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+  with_items:
+  - { regexp: 'ZSH_THEME="robbyrussell"', line: 'ZSH_THEME="{{ zsh_theme }}"' }
+  - { regexp: 'plugins=\(git\)', line: 'plugins=({{ zsh_plugins }} zsh-autosuggestions)' }
+
+- name: "Add aliases in /home/{{ user }}/.zshrc file"
+  lineinfile:
+    path: "/home/{{ user }}/.zshrc"
+    line: "{{ item }}"
+    state: present
+  with_items:
+    - alias pa="php artisan"
+    - alias migrate="php artisan migrate"
+    - alias rollback="php artisan migrate:rollback"
+    - alias seed="php artisan db:seed"
+    - alias tinker="php artisan tinker"
+    - alias pat="tinker"
+    - alias patr="while true; do php artisan tinker; done"
+    - alias commitcount="git rev-list --all --count"
+    - alias gcmtc="commitcount"
+    - alias gcom="git checkout master"
+    - alias dracarys="git clean -df && git reset --hard"
+    - alias amend="git add . && git commit --amend --no-edit"
+
+- name: Get zsh path
+  command: which zsh
+  register: zsh_path
+
+- name: Switch to zsh
+  user:
+    name: "{{ user }}"
+    shell: "{{ zsh_path.stdout }}"

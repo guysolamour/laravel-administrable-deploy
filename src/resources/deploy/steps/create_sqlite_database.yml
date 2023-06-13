@@ -1,0 +1,6 @@
+---
+- name: Creating sqlite database
+  copy:
+    content: ""
+    dest: "{{ sqlite_database_path }}"
+    force: false

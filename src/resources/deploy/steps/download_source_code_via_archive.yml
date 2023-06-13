@@ -1,0 +1,13 @@
+---
+- name: Create archive from project folder
+  shell: "zip -r {{ archive }}.zip . -x *.git* {{ ignored_files_for_archive }}"
+  args:
+    chdir: "{{ project_path }}"
+  delegate_to: localhost
+  when: copy_strategy == 'archive'
+
+- name: Move archive to playbook directory
+  command: mv "{{ project_path  }}/{{ archive }}.zip"  "{{ temporary_dir }}"
+  delegate_to: localhost
+  when: copy_strategy == 'archive'
+

@@ -1,0 +1,9 @@
+---
+- name: Install dependencies
+  composer:
+    command: update
+    executable: "/usr/bin/php{{ php_version }}"
+    no_dev: true
+    working_dir: "{{ ansistrano_release_path.stdout }}"
+    optimize_autoloader: true
+

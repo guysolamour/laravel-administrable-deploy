@@ -1,0 +1,3 @@
+database_dump_filename: dbdump.sql
+current_realease_path:  "/home/{{ user }}/{{ domain }}/current"
+# database_dump_folder: "database/snapshots/{{ database_dump_filename }}.sql"

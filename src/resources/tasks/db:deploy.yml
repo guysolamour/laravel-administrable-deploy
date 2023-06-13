@@ -1,0 +1,224 @@
+---
+- name: Import database from host to remote
+  hosts: all
+  gather_facts: no
+  remote_user:  "{{ user }}"
+
+  tasks:
+  - name: Include default variables
+    include_vars: "{{ playbooks_directory_path }}/variables/default.yml"
+
+  - name: Include variables
+    include_vars: "{{ playbooks_directory_path }}/variables/db.yml"
+
+  - name: Include password file
+    include_vars: "{{ stub_deploy_password_file_path }}"
+
+  - name: Get local database driver
+    shell: "php artisan tinker --execute=\"echo config('database.default');\""
+    register: local_database_driver
+    args:
+      chdir: "{{ project_path }}"
+    delegate_to: localhost
+
+
+  # SQLITE
+  - name: "SQLITE: Get local database url"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.database');\""
+    register: local_sqlite_database_path
+    args:
+      chdir: "{{ project_path }}"
+    delegate_to: localhost
+    when: "local_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Dump local sqlite database"
+    shell: "sqlite3 {{ local_sqlite_database_path.stdout }} .dump > {{ database_dump_filename }}"
+    args:
+      chdir: "{{ project_path }}"
+    delegate_to: localhost
+    when: "local_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Copy file from host to remote"
+    copy:
+      src: "{{ project_path }}/{{ database_dump_filename }}"
+      dest: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      owner: "{{ user }}"
+      group: "{{ remote_server_user }}"
+      mode: 0775
+    when: "local_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Get remote database driver"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.default');\""
+    register: remote_database_driver
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "local_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Get remote sqlite database path"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.database');\""
+    register: remote_sqlite_database_path
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Copy remote sqlite database before importing"
+    copy:
+      src: "{{ remote_sqlite_database_path.stdout }}"
+      dest: "{{ remote_sqlite_database_path.stdout }}.bak"
+      remote_src: yes
+      owner: "{{ user }}"
+      group: "{{ remote_server_user }}"
+      mode: 0775
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Remove remote database"
+    file:
+      path: "{{ remote_sqlite_database_path.stdout }}"
+      state: absent
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Import local database in remote"
+    shell: "sqlite3 {{ remote_sqlite_database_path.stdout }} < {{ database_dump_filename }}"
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Change database ownership, group and permissions"
+    file:
+      path: "{{ remote_sqlite_database_path.stdout }}"
+      owner: "{{ user }}"
+      group: "{{ remote_server_user }}"
+      mode: 0775
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  - name: "SQLITE: Remove remote sqlite dump file"
+    file:
+      path: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      state: absent
+    when: "local_database_driver.stdout == 'sqlite' and remote_database_driver.stdout == 'sqlite'"
+
+  # - name: Ending the 1st play now
+  #   meta: end_play
+
+  # MYSQL
+  - name: "MYSQL: Get local host"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.host');\""
+    register: local_mysql_database_host
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Get local host"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.host');\""
+    register: local_mysql_database_host
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Get local port"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.port');\""
+    register: local_mysql_database_port
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Get local username"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.username');\""
+    register: local_mysql_database_username
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Get local password"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.password');\""
+    register: local_mysql_database_password
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Get local database"
+    shell: "php artisan tinker --execute=\"echo config('database.connections.{{ local_database_driver.stdout }}.database');\""
+    register: local_mysql_database_database
+    args:
+      chdir: "{{ project_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: dump database"
+    mysql_db:
+      state: dump
+      login_host: "{{ local_mysql_database_host.stdout }}"
+      login_port: "{{ local_mysql_database_port.stdout }}"
+      login_user: "{{ local_mysql_database_username.stdout }}"
+      login_password: "{{ local_mysql_database_password.stdout }}"
+      name: "{{ local_mysql_database_database.stdout }}"
+      target: "{{ project_path }}/{{ database_dump_filename }}"
+    when: "local_database_driver.stdout == 'mysql'"
+    delegate_to: localhost
+
+  - name: "MYSQL: Copy file from host to remote"
+    copy:
+      src: "{{ project_path }}/{{ database_dump_filename }}"
+      dest: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      owner: "{{ user }}"
+      group: "{{ remote_server_user }}"
+      mode: 0775
+    when: "local_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote database driver"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.default');\""
+    register: remote_database_driver
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "local_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote host"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.host');\""
+    register: remote_mysql_database_host
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: Get remote port"
+    shell: "php{{ php_version }} artisan tinker --execute=\"echo config('database.connections.{{ remote_database_driver.stdout }}.port');\""
+    register: remote_mysql_database_port
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "remote_database_driver.stdout == 'mysql'"
+
+  - name: "MYSQL: import database"
+    mysql_db:
+      state: import
+      login_host: "{{ remote_mysql_database_host.stdout }}"
+      login_port: "{{ remote_mysql_database_port.stdout }}"
+      login_user: "{{ database_user }}"
+      login_password: "{{ vault_database_password }}"
+      name: "{{ database_name }}"
+      target: "{{ current_realease_path }}/{{ database_dump_filename }}"
+    when: "local_database_driver.stdout == 'mysql' and remote_database_driver.stdout == 'mysql'"
+    # delegate_to: localhost
+
+  - name: "MYSQL: Remove remote mysql dump file"
+    file:
+      path: "{{ current_realease_path }}/{{ database_dump_filename }}"
+      state: absent
+    when: "local_database_driver.stdout == 'mysql' and remote_database_driver.stdout == 'mysql'"
+
+  - name: "Change administrators password"
+    shell: "php{{ php_version }} artisan tinker --execute=\"DB::table('{{ db_dump_administrators_table_name }}')->where('email', '{{ item }}')->update(['password' => bcrypt('{{ vault_admin_production_password }}')])\""
+    args:
+      chdir: "{{ current_realease_path }}"
+    with_items: "{{ db_dump_administrators_emails | split(' ') | reject('sameas', '') | map('trim') }}"
+    when: "db_dump_change_administrators_password == 'yes' or db_dump_change_administrators_password == 'true'"
+
+  - name: Clear database cache
+    command: "php{{ php_version }} artisan modelCache:clear"
+    ignore_errors: yes # will not run if model cache package was not installed
+    args:
+      chdir: "{{ current_realease_path }}"
+    when: "db_dump_change_administrators_password == 'yes' or db_dump_change_administrators_password == 'true'"
